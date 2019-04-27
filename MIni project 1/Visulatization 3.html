@@ -1,0 +1,312 @@
+//// Reference from : http://bl.ocks.org/lmatteis/5da1af2490e38e01f44d48f2b9af81e7 (Title : Multiple pie charts on map)<br>
+//// Reference from : https://bl.ocks.org/Andrew-Reid/d5686606af0fbd69ed8f71f5b36420a5 (Title : Multiple Pie Charts on Map - Data from CSV)
+<html>
+
+<head>
+    <style>
+        body {
+            font-family: Georgia,Helvetica, Arial, sans-serif
+        }
+
+        h1 {
+            background-color: #2a5599;
+            color: white;
+            padding: 5px;
+        }
+
+        svg {
+            border: solid 1px black;
+        }
+        div{
+            display: block;
+           margin-left: auto;
+           margin-right: auto;
+        }
+
+        .mainView {
+            display: flex;
+        }
+    </style>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="d3.js"></script>
+</head>
+
+<body>
+        <center> <h1>Q. Visualization 3</h1></center>
+    <div class="mainView">
+        <div class="division">
+            <svg id="Map"></svg>
+        </div>
+    </div>
+
+
+  <script type="text/javascript">
+    
+    let store ={}
+    let max = 0
+    let min = 0
+    let sum=0
+    let maps = []
+
+    //To get countries along which number of times they recieved a particular type of donation
+  
+    function groupByPurpose(data){
+      let result = data.reduce((result,d) => {
+        let curr = result[d.coalesced_purpose_code] || {
+          "purpose" : d.coalesced_purpose_code,
+          "Purpose_name" : d.coalesced_purpose_name,
+          "recipient" : {[d.recipient]:0},
+          "count" : 0
+        }
+        
+        curr.count+=1
+        curr.recipient[d.recipient]!=undefined? curr.recipient[d.recipient]+=1:curr.recipient[d.recipient]=1
+
+      result[d.coalesced_purpose_code]=curr
+      //console.log(result)
+
+       return result;
+      },{}) 
+
+      result = Object.keys(result).map(key => result[key])
+      
+      
+      result.sort(function(x,y){
+        return d3.descending(x.count,y.count)
+      })
+
+
+      return result.slice(0,5)// Top 5 purpose
+    }
+
+    function makepurpose(data){
+      let listOfPurpose={}
+      for(var i=0;i<5;i++){
+        listOfPurpose[data[i].purpose]=0
+      }
+
+      return listOfPurpose
+      
+    }
+
+    function groupByRecipient(data){
+      var countries ={}
+      for(var i in data){
+        var recipients = data[i].recipient
+        for(var j in recipients){
+          if(countries[j]!=undefined){
+            countries[j].purpose[data[i].purpose] = recipients[j]
+          }else{
+            let listOfPurpose = makepurpose(data)
+            countries[j]={"purpose":listOfPurpose}
+            countries[j].purpose[data[i].purpose]= recipients[j]
+       //     console.log("----------------------------@@@@@@@@@@@@@@@@@@@@@@@@@@@---------------------")
+     // console.log(recipients[j])
+         }
+        }
+      }
+
+      //console.log("----------------------------@@@@@@@@@@@@@@@@@@@@@@@@@@@---------------------")
+      //console.log(countries)
+      return countries
+    }
+
+
+    function getCountries(data){
+
+      for(var i=0; i<Object.values(store.latLong).length-1;i++){
+        let name = store.latLong[i].name
+       // console.log("CheckingFor: "+name)
+        if($.inArray(name,Object.keys(data))!=-1){
+        //  console.log("present")
+          data[name].latitude = store.latLong[i].latitude
+          data[name].longitude = store.latLong[i].longitude
+        }
+      }
+      store.countries = data
+      return data
+    }
+
+
+    function loadData() {
+    return Promise.all([
+      d3.csv("./aiddata.csv"),
+      d3.json("./contries.geo.json"),
+      d3.csv("./countryLatLong.csv")
+    ]).then(file => {
+        store.geo = file[0];
+        store.geoJSON = file[1]
+        store.latLong = file[2]
+      for(var i = 0;i<file[0].length;i++){
+        sum+= parseInt(file[0][i].commitment_amount_usd_constant)
+      }
+        return store, sum;
+
+    })
+}
+
+    function getMapConfig(){
+      let width = 1000;
+      let height = 950;
+      let container = d3.select("#Map")
+        .attr("width", width)
+        .attr("height",height)           
+      return {width, height, container}
+    }
+
+    function getMapProjection(config) {
+      let {width, height} = config;
+      let projection = d3.geoMercator()
+      projection.scale(200)
+        .translate([width / 2, height /2 + 20])
+
+      store.mapProjection = projection;
+      return projection;
+    }
+
+    function drawBaseMap(container, countries, projection){
+      let path = d3.geoPath()
+      .projection(projection)
+
+  container.selectAll("path").data(countries)
+      .enter().append("path")
+      .attr("d",path)
+      .attr("stroke", "#ccc")
+      .attr("fill", "#eee")
+    }
+      function drawMap(geoJeon) {
+        let config = getMapConfig();
+        let projection = getMapProjection(config)
+        drawBaseMap(config.container, geoJeon.features, projection)
+    }
+
+    function showData() {
+        let routes = store.geo
+        let geoLocations = groupByPurpose(store.geo);
+      //  console.log(geoLocations)
+       var recipients = groupByRecipient(geoLocations)
+      getCountries(recipients)
+      drawMap(store.geoJSON)
+      drawCountries(store.countries, geoLocations)
+
+    } 
+
+    function drawCountries(data1, purpose) {
+      let config = getMapConfig(); //get the config
+      let projection = getMapProjection(config) //get the projection
+      let svg = config.container; //get the container
+
+
+      let data = Object.values(data1)
+
+
+
+
+      let radius = 10
+
+      var arc = d3.arc()
+        .innerRadius(0)
+        .outerRadius(radius)
+      var border=0.2
+
+      var arcBorder = d3.arc()
+  .innerRadius(radius)
+  .outerRadius(radius + border);
+
+// etc
+
+
+      var pie = d3.pie()
+        .sort(null)
+        .value(function(d){return d;});
+
+      var color = ["#8dd3c7",
+"#ffffb3",
+"#bebada",
+"#fb8072",
+"#80b1d3"]// CHOOSED WITH HELP OF COLORBREWER 2.0
+
+      var g2 = svg.append("g")
+
+      var points = g2.selectAll("g")
+        .data(data)
+        .enter()
+        .append("g")
+        .attr("transform",function(d){ return "translate(+"+projection([+d.longitude,+d.latitude])[0]+","+projection([+d.longitude,+d.latitude])[1]+")"})
+        .attr("class","pies")
+
+      var pies = points.selectAll(".pies")
+        .data(function(d) { return pie(Object.values(d.purpose)) })
+        .enter()
+        .append("g")
+        .attr("class","arc")
+
+      pies.append("path")
+        .attr('d',arc)
+      .style("opacity",0.7)
+      .style("stroke","black")
+        .attr('fill', function(d,i){
+          return color[i]
+        })
+
+      var colorMap =[
+        { 
+          "label": purpose[4].Purpose_name,
+          "color": color[0]
+        },
+        {
+          "label": purpose[3].Purpose_name,
+          "color": color[1]
+        },
+        {
+          "label": purpose[2].Purpose_name,
+          "color": color[2]
+        },
+        {
+          "label": purpose[1].Purpose_name,
+          "color": color[3]
+        },
+        {
+          "label": purpose[0].Purpose_name,
+          "color": color[4]
+        }
+
+      ]
+pies.append("path")
+  .attr("fill", "black")
+  .attr("d", arcBorder);
+
+
+var legendRectSize = 14; 
+var legendSpacing = 5; 
+
+var legend = svg.selectAll('.legend') 
+  .data(colorMap) 
+  .enter() // creates placeholder
+  .append('g') // replace placeholders with g elements
+  .attr('class', 'legend') // each g is given a legend class
+  .attr('transform', function(d, i) {                   
+    var height = legendRectSize + legendSpacing; // height of element is the height of the colored square plus the spacing      
+    var offset =  height * colorMap.length / 2; // vertical offset of the entire legend = height of a single element & half the sum number of elements  
+    var horz = 510+18 * legendRectSize; // the legend is shifted to the left to make room for the text
+    var vert = 725+i * height - offset; // the top of the element is hifted up or down from the center using the offset defiend earlier and the index of the current element 'i'               
+      return 'translate(' + horz + ',' + vert + ')'; //return translation       
+   });
+
+// adding colored squares to legend
+legend.append('rect') // append rectangle squares to legend                                   
+  .attr('width', legendRectSize) // width of rect size is defined above                        
+  .attr('height', legendRectSize) // height of rect size is defined above                      
+  .attr('fill', function(d,i){
+          return color[i]
+        })
+   legend.append('text')
+  .attr('x', legendRectSize + legendSpacing)
+  .attr('y', legendRectSize - legendSpacing)
+  .text(function(d) { return d.label; }); // return label
+    }
+    loadData().then(showData);
+  </script>
+</body>
+
+</html>

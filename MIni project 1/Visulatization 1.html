@@ -1,0 +1,313 @@
+//// Reference from : https://bl.ocks.org/kaijiezhou/bac86244017c850034fe (Title :My D3 Example - Double Side Bar Chart )
+<html>
+
+<head>
+    <style>
+        body {
+            font-family: Georgia, Helvetica, Arial, sans-serif
+        }
+
+        h1 {
+            background-color: #2a5599;
+            color: white;
+            padding: 5px;
+
+        }
+
+        svg {
+          border : solid 1px black;
+          
+        }
+
+        .mainView {
+          display: flex;
+        }
+        div{
+            display: block;
+           margin-left: auto;
+           margin-right: auto;
+        }
+
+
+
+        .chart {
+            margin: 10px;
+            padding-top: 10px;
+        }
+
+        .chart .left {
+          color:"red"
+        }
+        .chart .right {
+          color: "green"
+        }
+
+    </style>
+
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+<script src="d3.js"></script>
+</head>
+
+<body>
+    <center><h1>Q. Visualization 1</h1></center>
+    <div class="mainView">
+      <div class="newclass"></div>
+    </div>
+
+
+  <script type="text/javascript">
+    
+    let store ={}
+    let sum =0
+
+
+   function loadData() {
+    
+     let promise=   d3.csv("./aiddata.csv")
+  
+    return promise.then(datasets => {
+      store.donations = datasets;
+      for(var i = 0;i<datasets.length;i++){
+        sum+= parseInt(datasets[i].commitment_amount_usd_constant)
+      }
+        return store, sum;
+    })
+     }
+
+    function groupByDonor(data){
+      let result = data.reduce((result,d) => {
+        let curr = result[d.aiddata_id] || {
+          "Country": d.donor,
+          "damount": parseInt(d.commitment_amount_usd_constant),
+          "ramount": 0
+        }
+
+        curr.damount+= result[d.donor]!=undefined? parseInt(result[d.donor].damount) : 0
+        result[d.donor] = curr;
+
+
+                
+        return result;
+      },{}) 
+
+      result = Object.keys(result).map(key => result[key])
+
+      result.sort(function(x,y){
+        return d3.descending(x.damount, y.damount)
+      })
+
+      return result
+    }
+
+    function groupByRecipient(data, donors){
+      let result = data.reduce((result,d) => {
+        let curr = result[d.aiddata_id] || {
+          "Country": d.recipient,
+          "ramount": parseInt(d.commitment_amount_usd_constant),
+          "damount": 0
+        }
+
+        curr.ramount+= result[d.recipient]!=undefined? parseInt(result[d.recipient].ramount) : 0
+        result[d.recipient] = curr;
+                
+        return result;
+      },{}) 
+
+
+       for(var i=0;i<donors.length;i++){
+        if($.inArray(donors[i].Country,Object.keys(result))!=-1){
+          result[donors[i].Country].damount=donors[i].damount;
+        }else{
+          result[donors[i].Country]=donors[i]
+        }
+      }
+
+      result = Object.keys(result).map(key => result[key])
+
+      result.sort(function(x,y){
+        return d3.descending((x.ramount-x.damount), (y.ramount-y.damount))
+      })
+
+
+     
+
+
+      return result
+    }
+
+    function showData() {
+        let Countrieswithdonation = groupByDonor(store.donations);
+        console.log(Countrieswithdonation)
+        let Countrieswithalldata = groupByRecipient(store.donations, Countrieswithdonation)
+        drawGraph(Countrieswithalldata)
+          } 
+
+ 
+    var labelArea = 160;
+    var chart,
+            width = 510,
+            bar_height = 8,
+      height = 800;
+    var maxW = 500;
+    var rightOffset = width + labelArea;
+
+    var xFrom = d3.scaleLinear()
+            .range([0, maxW]);
+    var xTo = d3.scaleLinear()
+            .range([0, maxW]);
+    var y = d3.scaleBand()
+      .range([20, height]);
+
+    var scaler =500;
+
+    function drawGraph(data){
+
+    var chart = d3.select(".newclass")
+                .append('svg')
+                .attr('class', 'chart')
+                .attr('width', labelArea + width + width)
+                .attr('height', height);
+
+        xFrom.domain([0,maxW])
+        xTo.domain([0,maxW]);
+
+        y.domain(data.map(function (d) {
+            return d.Country;
+        }));
+
+        var yPosByIndex = function (d) {
+            return y(d.donors);
+        };
+
+        //---------------------------------------------------------
+        // To make the left part of the chart
+        //// for left chart box filling
+        chart.selectAll("rect.left")
+                .data(data)
+                .enter().append("rect")
+                .attr("x", function (d) {
+                  return width - xFrom((d.damount/sum))*scaler;  
+                })
+                .attr("y", function (d) {
+                    return y(d.Country) + y.bandwidth() / 3;
+                })
+                .attr("fill", "red")
+                .attr("width", function (d) {
+                    return xFrom((d.damount/sum)*scaler);
+                })
+                .attr("height", y.bandwidth()/2);
+        
+        //// for left chart box boundary
+        chart.selectAll("rect.left")
+                .data(data)
+        .enter().append("rect")
+        .attr("x", function(d){
+          return width-xFrom(scaler);
+        })
+      .attr("y", function (d) {
+                    return y(d.Country) + y.bandwidth() / 3;
+                })
+        .attr("stroke","none")
+      .attr("fill","none")
+        .attr("width", function (d) {
+                    return xFrom(scaler);
+                })
+                .attr("height", y.bandwidth()/2);
+
+        //// for left chart label in the box
+        chart.selectAll("text.leftscore")
+                .data(data)
+                .enter().append("text")
+                .attr("x", function (d) {
+                    return width - xFrom((d.damount/sum))*scaler-40;
+                })
+                .attr("y", function (d) {
+                    return y(d.Country) + y.bandwidth() / 2;
+                })
+                .attr("dx", "20")
+                .attr("dy", ".36em")
+                .attr("text-anchor", "end")
+                .attr('class', 'leftscore')
+                .text(function(d){return (((d.damount/sum)*100).toFixed(2)+"%");});
+ 
+        //-------------------------------------------------------------------
+        // For putting countries name in middle !
+        chart.selectAll("text.name")
+                .data(data)
+                .enter().append("text")
+                .attr("x", (labelArea / 2) + width)
+                .attr("y", function (d) {
+                    return y(d.Country) + y.bandwidth() / 2;
+                })
+                .attr("dy", ".20em")
+                .attr("text-anchor", "middle")
+                .attr('class', 'name')
+                .text(function(d){return d.Country;});
+
+        
+        //---------------------------------------------------------
+        // To make the right part of the chart
+        //// for right chart box filling
+
+        chart.selectAll("rect.right")
+                .data(data)
+                .enter().append("rect")
+                .attr("x", rightOffset)
+                .attr("y", function (d) {
+                    return y(d.Country) + y.bandwidth() / 3;
+                })
+                .attr("fill", "green")
+                .attr("width", function (d) {
+                    return xTo((d.ramount/sum)*scaler);
+                })
+                .attr("height", y.bandwidth()/2);
+
+         //// for right chart box boundary
+        chart.selectAll("rect.right")
+                .data(data)
+        .enter().append("rect")
+        .attr("x", rightOffset)
+      .attr("y", function (d) {
+                    return y(d.Country) + y.bandwidth() / 3;
+                })
+        .attr("stroke","none")
+      .attr("fill","none")
+        .attr("width", function (d) {
+                    return xTo(scaler);
+                })
+                .attr("height", y.bandwidth()/2);
+
+
+
+        //// for right chart label in the box
+        chart.selectAll("text.score")
+                .data(data)
+                .enter().append("text")
+                .attr("x", function (d) {
+                    return xTo((d.ramount/sum)*scaler) + rightOffset+70;
+                })
+                .attr("y", function (d) {
+                    return y(d.Country) + y.bandwidth() / 2;
+                })
+                .attr("dx", -5)
+                .attr("dy", ".36em")
+                .attr("text-anchor", "end")
+                .attr('class', 'score')
+                .text(function(d){return  (((d.ramount/sum)*100).toFixed(2)+"%");});
+
+
+        chart.append("text").attr("x",width/3).attr("y", 15).attr("class","title").text("DONATED (%)").attr("font-size","20px").attr("font-weight","bold");
+        chart.append("text").attr("x",width/3+rightOffset).attr("y", 15).attr("class","title").text("RECIEVED (%)").attr("font-size","20px").attr("font-weight","bold");
+        chart.append("text").attr("x",width+labelArea/3-20).attr("y", 15).attr("class","title").text("COUNTRIES").attr("font-size","20px").attr("font-weight","bold");
+
+
+
+    }
+
+    loadData().then(showData);
+  </script>
+</body>
+
+</html>
+

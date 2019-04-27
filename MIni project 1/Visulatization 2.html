@@ -1,0 +1,307 @@
+////Reference from :https://bl.ocks.org/lucguillemot/787e620d68366d9a0587 (Title : Choropleth map with diverging color scale. )
+<html>
+
+<head>
+    <style>
+        body {
+            font-family: Georgia, Helvetica, Arial, sans-serif
+        }
+
+        h1 {
+            background-color: #2a5599;
+            color: white;
+            padding: 5px;
+                    }
+
+        svg {
+          border : solid 1px black;
+        }
+        
+        div{display: block;
+            margin-left: auto;
+         margin-right: auto }
+
+        .mainView {
+          display: flex;
+        }
+
+     </style>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+<script src="d3.js"></script>
+</head>
+
+<body>
+        <center><h1>Q. Visualization 2</h1></center>
+    <div class="mainView">
+        <div class="division">
+            <svg id="Map"></svg>
+        </div>
+        
+    </div>
+
+
+  <script type="text/javascript">
+    
+    let store ={}
+    let max = 0
+    let min = 0
+    let sum=0
+    let maps = []
+
+    function loadData() {
+    return Promise.all([
+      d3.csv("./aiddata.csv"),
+      d3.json("./contries.geo.json")
+    ]).then(file => {
+        store.geo = file[0];
+        store.geoJSON = file[1]
+      for(var i = 0;i<file[0].length;i++){
+        sum+= parseInt(file[0][i].commitment_amount_usd_constant)
+      }
+        return store, sum;
+
+    })
+}
+    function getCountries(data){
+      let countries = []
+      for(var i=0;i<data.length;i++){
+        countries[i]=data[i].Country
+      }
+      store.countries = countries
+      let tempMap = {}
+
+      for(var i=0; i<Object.values(store.geoJSON)[1].length;i++){
+        console.log("CheckingFor: "+store.geoJSON.features[i].properties.name)
+        if($.inArray(store.geoJSON.features[i].properties.name,countries)!=-1){
+          console.log("present")
+          tempMap[store.geoJSON.features[i].properties.name] = store.geoJSON.features[i]
+          console.log(store.geoJSON.features[i])// Lat and long with other features
+        }
+      }
+
+      for( var i=0;i<data.length;i++ ){
+        maps[i]= tempMap[data[i].Country]
+        maps[i]["finalAmount"]=data[i].finalAmount
+      }
+      
+    }
+
+    //-----------------------------------
+    // For getting Countries along with donation amount
+    function groupByDonor(data){
+      let result = data.reduce((result,d) => {
+        let curr = result[d.aiddata_id] || {
+          "Country": d.donor,
+          "damount": parseInt(d.commitment_amount_usd_constant),
+          "ramount": 0
+        }
+
+        curr.damount+= result[d.donor]!=undefined? parseInt(result[d.donor].damount) : 0
+        result[d.donor] = curr;
+
+
+                
+        return result;
+      },{}) 
+
+      result = Object.keys(result).map(key => result[key])
+
+      result.sort(function(x,y){
+        return d3.descending(x.damount, y.damount)
+      })
+
+      return result
+    }
+    //-----------------------------------
+    // For getting Countries along with donation amount and recieve amount and finaly getting diff between donated and recieved
+    
+    function groupByRecipient(data, donors){
+      let result = data.reduce((result,d) => {
+        let curr = result[d.aiddata_id] || {
+          "Country": d.recipient,
+          "ramount": parseInt(d.commitment_amount_usd_constant),
+          "damount": 0
+        }
+
+        curr.ramount+= result[d.recipient]!=undefined? parseInt(result[d.recipient].ramount) : 0
+        result[d.recipient] = curr;
+                
+        return result;
+      },{}) 
+
+
+       for(var i=0;i<donors.length;i++){
+        if($.inArray(donors[i].Country,Object.keys(result))!=-1){
+          result[donors[i].Country].damount=donors[i].damount;
+        }else{
+          result[donors[i].Country]=donors[i]
+        }
+      }
+
+      result = Object.keys(result).map(key => result[key])
+      result.forEach(function(k){
+        var tempAmount = ((k.damount/sum)-(k.ramount/sum))*100
+        k.finalAmount = tempAmount
+        return k
+      })
+
+      
+      result.sort(function(x,y){
+        return d3.descending(x.finalAmount,y.finalAmount)
+      })
+
+      max=result[0].finalAmount
+      min=result[result.length-1].finalAmount
+      console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@*******************************************@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+      console.log(min)
+      console.log(max)
+      return result
+    }
+
+
+   
+    
+
+    function getMapConfig(){
+      let width = 800;
+      let height = 800;
+      let container = d3.select("#Map")
+        .attr("width", width)
+        .attr("height",820)           
+      return {width, height, container}
+    }
+
+    function getMapProjection(config) {
+      let {width, height} = config;
+      let projection = d3.geoMercator()
+      projection.scale(110)
+                .translate([width / 2, height / 2 + 20])
+
+      store.mapProjection = projection;
+      return projection;
+    }
+
+    function drawBaseMap(container, countries, projection){
+      let path = d3.geoPath()
+      .projection(projection)
+
+  container.selectAll("path").data(countries)
+      .enter().append("path")
+      .attr("d",path)
+      .attr("stroke", "#ccc")
+      .attr("fill", "#B8B8B8")
+    }
+      function drawMap(geoJeon) {
+        let config = getMapConfig();
+        let projection = getMapProjection(config)
+        drawBaseMap(config.container, geoJeon.features, projection)
+    }
+
+    function showData() {
+        //Get the routes from our store variable
+        let routes = store.geo
+        // Compute the number of routes per airline.
+        let geoLocations = groupByDonor(store.geo);
+        geoLocations = groupByRecipient(store.geo, geoLocations)
+        console.log(geoLocations)
+      getCountries(geoLocations)
+      drawMap(store.geoJSON)
+      drawCountries(geoLocations)
+
+    } 
+
+    function drawCountries(data) {
+      let config = getMapConfig(); //get the config
+      let projection = getMapProjection(config) //get the projection
+      let svg = config.container; //get the container
+
+      var EqualColor = "#f7f7f7",// Choosed with colorBrewer 2.0
+      donorMax = "#e66101",// Choosed with colorBrewer 2.0
+      recipientMin = "#5e3c99";// Choosed with colorBrewer 2.0
+
+      var donorColor = d3.scaleLinear()
+        .range([EqualColor, donorMax])
+        .domain([0.5,-min])
+        .interpolate(d3.interpolateLab);
+      var recipientColor = d3.scaleLinear()
+        .range([EqualColor, recipientMin])
+        .domain([-0.5,min])
+        .interpolate(d3.interpolateLab)
+
+      var legend = svg.append("g").attr("class", "legend").attr("transform", "translate(510,40)")
+      var prop = svg.append("g").attr("class", "propSelection").attr("transform", "translate(430,30)");
+
+
+      let path = d3.geoPath()
+      .projection(projection)
+
+svg.append("g")
+        .selectAll("path")
+      .data(maps)
+        .enter().append("path")
+        .attr("d",path)
+        .attr("fill", function(d) {
+          if (d.finalAmount >=0){
+            return donorColor(d.finalAmount); 
+          }
+          else {
+            return recipientColor(d.finalAmount); 
+          }
+        });
+
+      var fakeData = [];
+      var divisions= 200;
+      var legend_width = 200;
+
+    var rectWidth = Math.floor(legend_width / divisions);
+
+    for (var i=0; i < legend_width/2; i+= rectWidth ) {
+        fakeData.push(i);
+    }
+
+    var donorScaleLegend = d3.scaleLinear()
+          .domain([0, fakeData.length-1])
+          .interpolate(d3.interpolateLab)
+          .range([EqualColor, donorMax]);
+
+    var recipientScaleLegend = d3.scaleLinear()
+          .domain([fakeData.length-1,0])
+          .interpolate(d3.interpolateLab)
+          .range([EqualColor, recipientMin]);
+
+    var donorLegend = legend.append("g").attr("class", "donorLegend").attr("transform", "translate("+(legend_width/2)+",0)"),
+        recipientLegend = legend.append("g").attr("class", "recipientLegend");
+
+    donorLegend.selectAll("rect")
+        .data(fakeData)
+        .enter()
+        .append("rect")
+            .attr("x", function(d) { return d; })
+            .attr("y", 10)
+            .attr("height", 10)
+            .attr("width", rectWidth)
+            .attr("fill", function(d, i) { return donorScaleLegend(i)});
+
+    recipientLegend.selectAll("rect")
+        .data(fakeData)
+        .enter()
+        .append("rect")
+            .attr("x", function(d) { return d; })
+            .attr("y", 10)
+            .attr("height", 10)
+            .attr("width", rectWidth)
+            .attr("fill", function(d, i) { return recipientScaleLegend(i)});
+
+    legend.append("text").text("Donated More ").attr("transform", "translate("+(legend_width/2+50)+",0)");
+    legend.append("text").text("Recieved more").attr("transform", "translate("+(legend_width/2-150)+",0)");
+    legend.append("text").text("(Donated-Recieved)").attr("transform","translate("+(legend_width/2-80)+",40)")
+
+    
+  };
+
+
+    loadData().then(showData);
+  </script>
+</body>
+
+</html>
