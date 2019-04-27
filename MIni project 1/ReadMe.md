@@ -20,8 +20,11 @@ Goal<br>
 Your goal is to create 3 independent visualizations of the same data set, each one with the intent of answering the questions stated below. For each numbered visualization, you should be able to create a data visualization that answers all of the questions specified.
 These are the 3 visualizations you should create.<br>
 ●	Visualization 1: How do the countries compare in terms of how much they receive and donate from other countries? Are there countries that donate much more than they receive or receive much more than they donate?<br>
+![Visualization_1](1.png)
 
 ●	Visualization 2: Do the countries that receive or donate the most tend to cluster around specific geographical areas of the world? Are there neighboring countries that have radically different patterns in terms of how much they receive vs. how much they donate?<br>
+![Visualization_2](2.png)
 
 ●	Visualization 3: Are there any major differences in how the top 5 most frequent purposes of disbursements distribute geographically in terms of  countries that receive donations? Are there countries that tend to receive more of certain types of donations than others? <br>
+![Visualization_3](3.png)
 </body>
